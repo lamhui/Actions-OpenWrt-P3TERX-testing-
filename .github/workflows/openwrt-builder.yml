@@ -111,9 +111,17 @@ jobs:
 
     - name: Organize files
       id: organize
-      if: env.UPLOAD_FIRMWARE == 'true' && !cancelled()
+      # 仅在编译成功且需要上传固件时执行
+      if: steps.compile.outputs.status == 'success' && env.UPLOAD_FIRMWARE == 'true' && !cancelled()
       run: |
-        cd openwrt/bin/targets/*/*
+        cd openwrt
+        # 动态查找固件目录（例如 bin/targets/mediatek/mt7981）
+        FW_DIR=$(find bin/targets -mindepth 2 -maxdepth 2 -type d | head -n1)
+        if [ -z "$FW_DIR" ]; then
+          echo "Error: No firmware directory found!" >&2
+          exit 1
+        fi
+        cd "$FW_DIR"
         rm -rf packages
         echo "FIRMWARE=$PWD" >> $GITHUB_ENV
         echo "status=success" >> $GITHUB_OUTPUT
@@ -127,11 +135,11 @@ jobs:
 
     - name: Generate release tag
       id: tag
-      if: env.UPLOAD_RELEASE == 'true' && !cancelled()
+      if: env.UPLOAD_RELEASE == 'true' && steps.organize.outputs.status == 'success' && !cancelled()
       run: |
         echo "release_tag=$(date +"%Y.%m.%d-%H%M")" >> $GITHUB_OUTPUT
         touch release.txt
-        [ ${UPLOAD_GOFILE} = true && ${{ steps.gofile.outputs.url }} ] && echo "🔗 [GoFile](${{ steps.gofile.outputs.url }})" >> release.txt
+        # 移除未定义的 UPLOAD_GOFILE 引用，如需可自行添加
         echo "status=success" >> $GITHUB_OUTPUT
 
     - name: Upload firmware to release
